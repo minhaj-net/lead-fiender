@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Codeloom Lead Finder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Backend disconnected overlay -->
+  <div class="disconnected-overlay" id="disconnected-overlay">
+    <div class="icon">🔌</div>
+    <strong style="color:#e2e8f0;font-size:13px">Backend Offline</strong>
+    <p>Start the FastAPI backend first:<br>
+      <code style="background:#1a1d27;padding:2px 6px;border-radius:4px;font-size:10px">
+        uvicorn backend.main:app --reload
+      </code>
+    </p>
+    <button class="btn btn-primary" id="btn-retry" style="margin-top:6px;grid-column:unset;width:120px">
+      <span class="btn-text">↻ Retry</span>
+    </button>
+  </div>
+
+  <!-- ── Header ───────────────────────────────────────── -->
+  <div class="header">
+    <div class="logo">🔍</div>
+    <div class="header-text">
+      <h1>Codeloom Lead Finder</h1>
+      <p>Local Automation — Part 1</p>
+    </div>
+  </div>
+
+  <!-- ── Status Bar ──────────────────────────────────── -->
+  <div class="status-bar" id="status-bar">
+    <div class="status-indicator" id="status-dot"></div>
+    <span id="status-text">Ready</span>
+    <span id="status-detail"></span>
+  </div>
+
+  <!-- ── Stats ───────────────────────────────────────── -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-found">0</div>
+      <div class="stat-label">Found</div>
+    </div>
+    <div class="stat-card qualified">
+      <div class="stat-value" id="stat-qualified">0</div>
+      <div class="stat-label">Qualified</div>
+    </div>
+    <div class="stat-card skipped">
+      <div class="stat-value" id="stat-skipped">0</div>
+      <div class="stat-label">Skipped</div>
+    </div>
+  </div>
+
+  <!-- ── Source URL input ─────────────────────────────── -->
+  <div class="source-section">
+    <label for="source-url">Facebook Source URL</label>
+    <input
+      type="text"
+      id="source-url"
+      placeholder="https://www.facebook.com/groups/..."
+    />
+  </div>
+
+  <!-- ── Buttons ──────────────────────────────────────── -->
+  <div class="btn-group">
+    <button class="btn btn-primary" id="btn-start">
+      <div class="spinner"></div>
+      <span class="btn-text">▶ Start</span>
+    </button>
+    <button class="btn btn-danger" id="btn-stop" disabled>
+      <span class="btn-text">■ Stop</span>
+    </button>
+    <button class="btn btn-secondary" id="btn-export">
+      <span class="btn-text">⬇ Export CSV</span>
+    </button>
+  </div>
+
+  <!-- ── Progress ─────────────────────────────────────── -->
+  <div class="progress-section" id="progress-section">
+    <div class="progress-label">
+      <span id="progress-label-text">Processing...</span>
+      <span id="progress-count">0 / 0</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- ── Error ────────────────────────────────────────── -->
+  <div class="error-box" id="error-box"></div>
+
+  <!-- ── Footer ───────────────────────────────────────── -->
+  <div class="footer">
+    Codeloom Lead Finder v1.0.0 &nbsp;|&nbsp;
+    <a href="http://127.0.0.1:8000/docs" target="_blank">API Docs</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
