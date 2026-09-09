@@ -24,7 +24,8 @@ const statusDetail     = document.getElementById('status-detail');
 const statFound        = document.getElementById('stat-found');
 const statQualified    = document.getElementById('stat-qualified');
 const statSkipped      = document.getElementById('stat-skipped');
-const sourceInput      = document.getElementById('source-url');
+const keywordInput     = document.getElementById('search-keyword');
+const locationInput    = document.getElementById('search-location');
 const btnStart         = document.getElementById('btn-start');
 const btnStop          = document.getElementById('btn-stop');
 const btnExport        = document.getElementById('btn-export');
@@ -81,7 +82,8 @@ function setError(msg) {
 function setRunningUI(running) {
   btnStart.disabled  = running;
   btnStop.disabled   = !running;
-  sourceInput.disabled = running;
+  keywordInput.disabled  = running;
+  locationInput.disabled = running;
   progressSection.classList.toggle('visible', running);
   if (!running) progressBar.style.width = '0%';
 }
@@ -169,13 +171,15 @@ async function pollStatus() {
 // ── Button handlers ───────────────────────────────────────────────────────────
 
 btnStart.addEventListener('click', async () => {
-  const sourceUrl = sourceInput.value.trim();
-  if (!sourceUrl) {
-    setError('Please enter a Facebook source URL.');
+  const keyword  = keywordInput.value.trim();
+  const location = locationInput.value.trim();
+
+  if (!keyword) {
+    setError('Please enter a search keyword (e.g. "web design").');
     return;
   }
-  if (!sourceUrl.startsWith('http')) {
-    setError('Please enter a valid URL starting with http:// or https://');
+  if (!location) {
+    setError('Please enter a location (e.g. "United States").');
     return;
   }
 
@@ -183,9 +187,9 @@ btnStart.addEventListener('click', async () => {
   setBtnLoading(btnStart, true);
 
   try {
-    await apiPost('/automation/start', { source_url: sourceUrl, max_leads: 50 });
+    await apiPost('/automation/start', { keyword, location, max_leads: 50 });
     setRunningUI(true);
-    setStatus('Running', 'Automation started…', 'running');
+    setStatus('Running', `Searching: ${keyword} in ${location}…`, 'running');
     startPolling();
   } catch (err) {
     setError(err.message);
@@ -234,14 +238,18 @@ btnRetry.addEventListener('click', async () => {
   const healthy = await checkHealth();
   if (!healthy) return;
 
-  // Restore saved source URL
-  chrome.storage.local.get(['sourceUrl'], (result) => {
-    if (result.sourceUrl) sourceInput.value = result.sourceUrl;
+  // Restore saved search criteria
+  chrome.storage.local.get(['searchKeyword', 'searchLocation'], (result) => {
+    if (result.searchKeyword)  keywordInput.value  = result.searchKeyword;
+    if (result.searchLocation) locationInput.value = result.searchLocation;
   });
 
-  // Save source URL on change
-  sourceInput.addEventListener('input', () => {
-    chrome.storage.local.set({ sourceUrl: sourceInput.value });
+  // Persist criteria on change
+  keywordInput.addEventListener('input', () => {
+    chrome.storage.local.set({ searchKeyword: keywordInput.value });
+  });
+  locationInput.addEventListener('input', () => {
+    chrome.storage.local.set({ searchLocation: locationInput.value });
   });
 
   // Check if already running

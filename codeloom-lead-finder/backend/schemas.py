@@ -68,8 +68,9 @@ class LeadUpdate(BaseModel):
 # ── Automation schemas ────────────────────────────────────────────────────────
 
 class AutomationStartRequest(BaseModel):
-    source_url: str = Field(..., description="Public Facebook source URL to process")
-    max_leads:  int = Field(50, ge=1, le=500, description="Maximum leads to collect this run")
+    keyword:  str = Field(..., min_length=2, description="Search keyword, e.g. 'web design'")
+    location: str = Field(..., min_length=2, description="Target location, e.g. 'United States'")
+    max_leads: int = Field(50, ge=1, le=500, description="Maximum leads to collect this run")
 
 
 class AutomationStatusResponse(BaseModel):
@@ -79,6 +80,7 @@ class AutomationStatusResponse(BaseModel):
     leads_found: int = 0
     leads_saved: int = 0
     status:      AutomationRunStatus | None = None
+    error_msg:   str | None = None
     message:     str = ""
 
 

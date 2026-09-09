@@ -33,7 +33,7 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             database=settings.mysql_database,
             charset="utf8mb4",
             collation="utf8mb4_unicode_ci",
-            autocommit=False,
+            autocommit=True,
         )
         logger.info("MySQL connection pool created.")
     return _pool

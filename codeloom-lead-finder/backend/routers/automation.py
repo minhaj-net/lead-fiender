@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 )
 def start_automation(request: AutomationStartRequest) -> AutomationStatusResponse:
     """
-    Start the Playwright automation for the given public source URL.
+    Start the Playwright automation using keyword + location discovery.
     Returns 409 if automation is already running.
     """
     if auto_svc.is_running():
@@ -32,15 +32,16 @@ def start_automation(request: AutomationStartRequest) -> AutomationStatusRespons
 
     try:
         run = auto_svc.start_automation(
-            source_url = request.source_url,
-            max_leads  = request.max_leads,
+            keyword   = request.keyword,
+            location  = request.location,
+            max_leads = request.max_leads,
         )
         return AutomationStatusResponse(
             running    = True,
             run_id     = run.id if run else None,
             started_at = run.started_at if run else None,
             status     = "RUNNING",
-            message    = "Automation started successfully.",
+            message    = f"Automation started: '{request.keyword}' in '{request.location}'.",
         )
     except Exception as exc:
         logger.error("Failed to start automation: %s", exc)
@@ -92,5 +93,6 @@ def get_status() -> AutomationStatusResponse:
         leads_found = run.leads_found,
         leads_saved = run.leads_saved,
         status      = run.status,
-        message     = f"Run {run.id} — {run.status}",
+        error_msg   = run.error_msg,
+        message     = f"Run {run.id} — {run.status}" + (f": {run.error_msg}" if run.error_msg else ""),
     )

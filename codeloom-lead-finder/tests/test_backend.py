@@ -102,6 +102,26 @@ class TestAutomationEndpoints:
         assert resp.status_code == 200
         assert resp.json()["running"] is False
 
+    def test_get_status_failed_run(self, client):
+        with patch("backend.routers.automation.auto_svc.get_current_run") as mock_run, \
+             patch("backend.routers.automation.auto_svc.is_running", return_value=False):
+            run = MagicMock()
+            run.id = 1
+            run.status = "FAILED"
+            run.started_at = None
+            run.leads_found = 0
+            run.leads_saved = 0
+            run.error_msg = "Browser binary not found"
+            mock_run.return_value = run
+
+            resp = client.get("/automation/status")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["running"] is False
+        assert data["status"] == "FAILED"
+        assert data["error_msg"] == "Browser binary not found"
+
 
 class TestRootEndpoint:
 
