@@ -68,6 +68,15 @@
       id="search-location"
       placeholder='e.g. United States, Dhaka, London'
     />
+    <label for="max-leads" style="margin-top:6px">Max Leads</label>
+    <input
+      type="number"
+      id="max-leads"
+      min="1"
+      max="500"
+      value="10"
+      placeholder="e.g. 10"
+    />
   </div>
 
   <!-- ── Buttons ──────────────────────────────────────── -->
@@ -79,8 +88,9 @@
     <button class="btn btn-danger" id="btn-stop" disabled>
       <span class="btn-text">■ Stop</span>
     </button>
-    <button class="btn btn-secondary" id="btn-export">
-      <span class="btn-text">⬇ Export CSV</span>
+    <button class="btn btn-download" id="btn-download">
+      <div class="spinner"></div>
+      <span class="btn-text">⬇ Download CSV</span>
     </button>
   </div>
 

@@ -83,6 +83,7 @@ def _extract_email(text: str) -> str | None:
 def detect_contacts(
     phone_field: str | None = None,
     whatsapp_field: str | None = None,
+    email_field: str | None = None,
     about_text: str | None = None,
     post_text: str | None = None,
 ) -> dict:
@@ -92,6 +93,7 @@ def detect_contacts(
     Args:
         phone_field:     Explicit phone field from FB page (if available).
         whatsapp_field:  Explicit WhatsApp field from FB page (if available).
+        email_field:     Explicit email field / mailto link from FB page (if available).
         about_text:      'About' section text.
         post_text:       Business post text.
 
@@ -102,6 +104,7 @@ def detect_contacts(
             "business_email":    str | None,
             "phone_source":      str,
             "whatsapp_source":   str,
+            "email_source":      str,
         }
     """
     result = {
@@ -110,6 +113,7 @@ def detect_contacts(
         "business_email":    None,
         "phone_source":      "none",
         "whatsapp_source":   "none",
+        "email_source":      "none",
     }
 
     # ── Phone ──────────────────────────────────────────────────────────────────
@@ -145,10 +149,21 @@ def detect_contacts(
             logger.debug("WhatsApp from text scan: %s", wa)
 
     # ── Email ──────────────────────────────────────────────────────────────────
-    combined_text = " ".join(filter(None, [about_text, post_text]))
-    email = _extract_email(combined_text)
-    if email:
-        result["business_email"] = email
-        logger.debug("Email found: %s", email)
+    # Priority 1: explicit email field / mailto link extracted by automation
+    if email_field and email_field.strip():
+        candidate = email_field.strip().lower()
+        if _EMAIL_PATTERN.match(candidate):
+            result["business_email"] = candidate
+            result["email_source"]   = "email_field"
+            logger.debug("Email from explicit field: %s", candidate)
+
+    # Priority 2: scan about text and post text
+    if not result["business_email"]:
+        combined_text = " ".join(filter(None, [about_text, post_text]))
+        email = _extract_email(combined_text)
+        if email:
+            result["business_email"] = email
+            result["email_source"]   = "text_scan"
+            logger.debug("Email from text scan: %s", email)
 
     return result

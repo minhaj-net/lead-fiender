@@ -235,6 +235,19 @@ body {
   color: var(--accent);
 }
 
+/* Download CSV button — full width row, green accent */
+.btn-download {
+  background: var(--surface2);
+  color: var(--green);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  grid-column: span 2;
+}
+.btn-download:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: var(--green);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.15);
+}
+
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -249,6 +262,10 @@ body {
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: none;
+}
+.btn-download .spinner {
+  border-color: rgba(34, 197, 94, 0.3);
+  border-top-color: var(--green);
 }
 .btn.loading .spinner { display: block; }
 .btn.loading .btn-text { display: none; }
