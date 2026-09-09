@@ -31,6 +31,7 @@ class Lead:
     website_status:    WebsiteStatus = "UNCERTAIN"
     business_phone:    str | None = None
     business_whatsapp: str | None = None
+    business_email:    str | None = None
     source:            str | None = None
     source_post:       str | None = None
     lead_score:        int = 0
@@ -52,6 +53,7 @@ class Lead:
             "website_status":    self.website_status,
             "business_phone":    self.business_phone,
             "business_whatsapp": self.business_whatsapp,
+            "business_email":    self.business_email,
             "source":            self.source,
             "source_post":       self.source_post,
             "lead_score":        self.lead_score,

@@ -170,13 +170,13 @@ def _save_lead(lead: Lead) -> int | None:
             INSERT INTO leads (
                 business_name, category, facebook_url, page_url,
                 country, city, website, website_status,
-                business_phone, business_whatsapp,
+                business_phone, business_whatsapp, business_email,
                 source, source_post,
                 lead_score, lead_priority, status
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s, %s, %s,
-                %s, %s,
+                %s, %s, %s,
                 %s, %s,
                 %s, %s, %s
             )
@@ -184,7 +184,7 @@ def _save_lead(lead: Lead) -> int | None:
             (
                 lead.business_name, lead.category, lead.facebook_url, lead.page_url,
                 lead.country, lead.city, lead.website, lead.website_status,
-                lead.business_phone, lead.business_whatsapp,
+                lead.business_phone, lead.business_whatsapp, lead.business_email,
                 lead.source, lead.source_post,
                 lead.lead_score, lead.lead_priority, lead.status,
             ),
@@ -395,10 +395,106 @@ async def _safe_text(page: Page, selector: str) -> str:
     return ""
 
 
+# ── Location / contact extraction helpers ─────────────────────────────────────
+
+# City/country signals found in FB page info sections
+_LOCATION_LABEL_RE = re.compile(
+    r"(?:located\s+in|address|location|city|town|state|province|country|region)"
+    r"[\s:,·\-]+([A-Za-z\s,\.]{3,60})",
+    re.IGNORECASE,
+)
+
+# Patterns like "Dhaka, Bangladesh" or "New York, United States"
+_CITY_COUNTRY_RE = re.compile(
+    r"\b([A-Z][a-z]{2,}(?:\s[A-Z][a-z]+)*)"   # City (Title Case word(s))
+    r"\s*,\s*"
+    r"([A-Z][a-z]{2,}(?:\s[A-Z][a-z]+)*)\b",   # Country (Title Case word(s))
+)
+
+# Known country names list for validation (a representative sample)
+_KNOWN_COUNTRIES = {
+    "afghanistan","albania","algeria","angola","argentina","armenia","australia",
+    "austria","azerbaijan","bahrain","bangladesh","belarus","belgium","bolivia",
+    "bosnia","brazil","bulgaria","cambodia","cameroon","canada","chile","china",
+    "colombia","croatia","cuba","czech republic","denmark","ecuador","egypt",
+    "ethiopia","finland","france","georgia","germany","ghana","greece","guatemala",
+    "honduras","hungary","india","indonesia","iran","iraq","ireland","israel",
+    "italy","ivory coast","jamaica","japan","jordan","kazakhstan","kenya","kuwait",
+    "kyrgyzstan","laos","latvia","lebanon","libya","lithuania","luxembourg",
+    "malaysia","maldives","mali","mexico","moldova","mongolia","morocco",
+    "mozambique","myanmar","namibia","nepal","netherlands","new zealand","nicaragua",
+    "nigeria","north korea","norway","oman","pakistan","panama","paraguay","peru",
+    "philippines","poland","portugal","qatar","romania","russia","rwanda",
+    "saudi arabia","senegal","serbia","singapore","slovakia","slovenia","somalia",
+    "south africa","south korea","spain","sri lanka","sudan","sweden","switzerland",
+    "syria","taiwan","tajikistan","tanzania","thailand","tunisia","turkey",
+    "turkmenistan","uganda","ukraine","united arab emirates","uae","united kingdom",
+    "uk","great britain","united states","usa","us","uruguay","uzbekistan",
+    "venezuela","vietnam","yemen","zambia","zimbabwe",
+}
+
+
+def _extract_location_from_text(text: str) -> tuple[str | None, str | None]:
+    """
+    Try to extract city and country from a text block.
+    Returns (city, country) — either can be None.
+    Does NOT infer from search keyword; only uses what the text contains.
+    """
+    if not text:
+        return None, None
+
+    # Normalize whitespace — collapse newlines/tabs into single spaces so
+    # multi-line page content doesn't produce values like "Restaurant\nDhaka"
+    text = re.sub(r"[\r\n\t]+", " ", text)
+    text = re.sub(r" {2,}", " ", text)
+
+    city: str | None = None
+    country: str | None = None
+
+    # Strategy 1: "City, Country" pattern (e.g., "Dhaka, Bangladesh")
+    for match in _CITY_COUNTRY_RE.finditer(text):
+        candidate_city    = match.group(1).strip()
+        candidate_country = match.group(2).strip()
+        # Reject if city candidate contains noise (numbers, slashes, etc.)
+        if not re.match(r"^[A-Za-z][A-Za-z\s\-\.]{1,40}$", candidate_city):
+            continue
+        if candidate_country.lower() in _KNOWN_COUNTRIES:
+            city    = candidate_city
+            country = candidate_country
+            break
+
+    # Strategy 2: Explicit location label  ("Located in: Dhaka, Bangladesh")
+    if not country:
+        loc_match = _LOCATION_LABEL_RE.search(text)
+        if loc_match:
+            location_str = loc_match.group(1).strip().rstrip(",.")
+            parts = [p.strip() for p in location_str.split(",")]
+            if len(parts) >= 2:
+                city    = city or parts[0]
+                country = parts[-1] if parts[-1].lower() in _KNOWN_COUNTRIES else country
+            elif len(parts) == 1 and parts[0].lower() in _KNOWN_COUNTRIES:
+                country = parts[0]
+
+    # Final sanitize — strip any residual whitespace from extracted values
+    if city:
+        city = re.sub(r"\s+", " ", city).strip()
+        city = city if city and len(city) >= 2 else None
+    if country:
+        country = re.sub(r"\s+", " ", country).strip()
+        country = country if country and len(country) >= 2 else None
+
+    return city or None, country or None
+
+
 async def _extract_page_data(page: Page, source_name: str) -> dict | None:
     """
     Extract publicly available data from a Facebook business page.
     Returns a raw data dict for lead_discovery.process_candidate(), or None on error.
+
+    Fields extracted:
+      business_name, category_hint, about_text, post_text,
+      website_field, phone_field, whatsapp_field, email_field,
+      country, city, facebook_url, page_url, source, source_post
     """
     try:
         raw_title = await page.title()
@@ -409,7 +505,7 @@ async def _extract_page_data(page: Page, source_name: str) -> dict | None:
 
         current_url = page.url
 
-        # About / description text
+        # ── About / description text ──────────────────────────────────────────
         about_text = ""
         for sel in [
             '[data-testid="page-intro-card"]',
@@ -421,7 +517,7 @@ async def _extract_page_data(page: Page, source_name: str) -> dict | None:
             if about_text:
                 break
 
-        # Fallback to meta description
+        # Fallback: meta description
         if not about_text:
             try:
                 meta_desc = await page.get_attribute('meta[name="description"]', "content")
@@ -429,51 +525,73 @@ async def _extract_page_data(page: Page, source_name: str) -> dict | None:
             except Exception:
                 pass
 
-        # Also grab all visible text from main content as fallback
+        # Fallback: full main content text (limited to 1500 chars)
         if not about_text:
             try:
                 about_text = await _safe_text(page, 'div[role="main"]')
-                about_text = about_text[:1000]
+                about_text = about_text[:1500]
             except Exception:
                 pass
 
-        # Website field (link to external site)
+        # ── Website field (external link on page) ─────────────────────────────
         website_field = ""
         try:
             links = await page.query_selector_all('a[href]')
             for lnk in links:
                 href = await lnk.get_attribute("href") or ""
                 if href.startswith("http") and "facebook.com" not in href.lower():
-                    # Skip social/messaging links
-                    social = ["instagram.com", "twitter.com", "x.com", "youtube.com",
-                              "wa.me", "t.me", "linkedin.com", "tiktok.com"]
+                    social = [
+                        "instagram.com", "twitter.com", "x.com", "youtube.com",
+                        "wa.me", "t.me", "linkedin.com", "tiktok.com",
+                    ]
                     if not any(s in href.lower() for s in social):
                         website_field = href
                         break
         except Exception:
             pass
 
-        # Phone field
+        # ── Phone field ───────────────────────────────────────────────────────
         phone_field = await _safe_text(page, '[aria-label*="Phone"]')
         if not phone_field:
             phone_field = await _safe_text(page, '[aria-label*="phone"]')
 
-        # Category
-        category_hint = await _safe_text(page, '[data-testid="page-category"]')
-        if not category_hint:
-            # Try to find category from page info section
-            try:
-                all_spans = await page.query_selector_all('span')
-                for span in all_spans[:50]:
-                    span_text = (await span.inner_text()).strip()
-                    # FB categories are typically short, title-case phrases
-                    if 3 < len(span_text) < 40 and span_text.istitle():
-                        category_hint = span_text
-                        break
-            except Exception:
-                pass
+        # ── Email field — check aria-label and mailto links ───────────────────
+        email_field = ""
+        try:
+            # Check for mailto: href
+            mailto_el = await page.query_selector('a[href^="mailto:"]')
+            if mailto_el:
+                href = await mailto_el.get_attribute("href") or ""
+                email_field = href.replace("mailto:", "").split("?")[0].strip()
+        except Exception:
+            pass
 
-        # Posts
+        if not email_field:
+            # Check aria-label="Email"
+            email_field = await _safe_text(page, '[aria-label*="Email"]')
+            if not email_field:
+                email_field = await _safe_text(page, '[aria-label*="email"]')
+
+        # ── Category hint ──────────────────────────────────────────────────────
+        category_hint = await _safe_text(page, '[data-testid="page-category"]')
+
+        # ── Location (country / city) — try structured page info first ────────
+        # FB pages often show location in the intro / info section
+        location_text = ""
+        for sel in [
+            '[data-testid="page-intro-card"]',
+            'div[data-pagelet="PageInfo"]',
+            'div[role="main"]',
+        ]:
+            location_text = await _safe_text(page, sel)
+            if location_text:
+                break
+        if not location_text:
+            location_text = about_text
+
+        extracted_city, extracted_country = _extract_location_from_text(location_text)
+
+        # ── Posts ──────────────────────────────────────────────────────────────
         post_text = ""
         try:
             posts = await page.query_selector_all('[data-testid="post_message"]')
@@ -492,8 +610,9 @@ async def _extract_page_data(page: Page, source_name: str) -> dict | None:
             "website_field":  website_field or None,
             "phone_field":    phone_field or None,
             "whatsapp_field": None,
-            "country":        None,
-            "city":           None,
+            "email_field":    email_field or None,
+            "country":        extracted_country,   # None if not found — pipeline handles fallback
+            "city":           extracted_city,      # None if not found — pipeline handles fallback
             "source":         source_name,
             "source_post":    post_text[:300] if post_text else None,
         }

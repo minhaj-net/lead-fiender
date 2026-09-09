@@ -32,6 +32,7 @@ class LeadBase(BaseModel):
     website_status:    WebsiteStatus = "UNCERTAIN"
     business_phone:    str | None = None
     business_whatsapp: str | None = None
+    business_email:    str | None = None
     source:            str | None = None
     source_post:       str | None = None
     lead_score:        int = Field(default=0, ge=0, le=100)

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS leads (
     website_status   ENUM('YES','NO','UNCERTAIN') NOT NULL DEFAULT 'UNCERTAIN',
     business_phone   VARCHAR(32),
     business_whatsapp VARCHAR(32),
+    business_email   VARCHAR(255),
     source           VARCHAR(255),
     source_post      TEXT,
     lead_score       TINYINT UNSIGNED DEFAULT 0,
@@ -79,6 +80,19 @@ CREATE TABLE IF NOT EXISTS leads (
     INDEX idx_status         (status),
     INDEX idx_created_at     (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+"""
+
+# Migration: add business_email column to existing tables that predate it.
+# We use a SELECT-based check instead of IF NOT EXISTS because older MySQL
+# versions (< 8.0.3) don't support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
+_MIGRATE_ADD_EMAIL_CHECK = """
+SELECT COUNT(*) FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME   = 'leads'
+  AND COLUMN_NAME  = 'business_email'
+"""
+_MIGRATE_ADD_EMAIL = """
+ALTER TABLE leads ADD COLUMN business_email VARCHAR(255) AFTER business_whatsapp
 """
 
 _CREATE_SOURCES_TABLE = """
@@ -108,6 +122,7 @@ CREATE TABLE IF NOT EXISTS automation_runs (
 def init_db() -> None:
     """
     Create all required tables if they don't already exist.
+    Also runs safe additive migrations for schema changes.
     Called once on backend startup.
     """
     try:
@@ -119,6 +134,15 @@ def init_db() -> None:
             _CREATE_AUTOMATION_RUNS_TABLE,
         ]:
             cursor.execute(ddl)
+
+        # Additive migration: add business_email column to pre-existing tables
+        cursor.execute(_MIGRATE_ADD_EMAIL_CHECK)
+        row = cursor.fetchone()
+        col_exists = row and row[0] > 0
+        if not col_exists:
+            cursor.execute(_MIGRATE_ADD_EMAIL)
+            logger.info("Migration applied: added business_email column to leads table.")
+
         conn.commit()
         cursor.close()
         conn.close()

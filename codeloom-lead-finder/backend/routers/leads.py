@@ -4,7 +4,8 @@ backend/routers/leads.py
 Lead management endpoints:
 
   GET    /leads            — list leads (filterable)
-  GET    /leads/export     — export to CSV
+  GET    /leads/export     — export to CSV file on disk (legacy)
+  GET    /leads/download   — stream CSV bytes directly for browser download
   GET    /leads/{id}       — get single lead
   DELETE /leads/{id}       — delete a lead
   PATCH  /leads/{id}       — update lead fields
@@ -12,13 +13,14 @@ Lead management endpoints:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import io
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.database import get_connection
 from backend.schemas import LeadRead, LeadUpdate, ExportResponse
-from backend.services.csv_exporter import export_leads_to_csv
+from backend.services.csv_exporter import export_leads_to_csv, build_csv_bytes
 from backend.utils.logger import get_logger
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -65,13 +67,14 @@ def list_leads(
         conn.close()
 
 
-@router.get("/export", response_model=ExportResponse, summary="Export leads to CSV")
+@router.get("/export", response_model=ExportResponse, summary="Export leads to CSV file on disk")
 def export_leads(
     status:   str = Query("QUALIFIED"),
     priority: str | None = Query(None, description="Comma-separated priorities, e.g. HOT,GOOD"),
 ) -> ExportResponse:
     """
     Export leads to a dated CSV file in the data/ directory.
+    Returns the file path and count (legacy endpoint — file stays on server).
     """
     priority_list = [p.strip().upper() for p in priority.split(",")] if priority else None
     try:
@@ -86,6 +89,39 @@ def export_leads(
         )
     except Exception as exc:
         logger.error("CSV export failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/download", summary="Stream CSV directly for browser download")
+def download_leads_csv(
+    status:   str = Query("QUALIFIED"),
+    priority: str | None = Query(None, description="Comma-separated priorities, e.g. HOT,GOOD"),
+):
+    """
+    Stream qualified leads as a CSV file directly to the caller.
+    The response includes Content-Disposition: attachment so the browser
+    (or Chrome Extension) triggers a real file download.
+
+    This endpoint is used by the Chrome Extension's Download CSV button.
+    """
+    priority_list = [p.strip().upper() for p in priority.split(",")] if priority else None
+    try:
+        csv_bytes = build_csv_bytes(
+            status_filter   = status.upper(),
+            priority_filter = priority_list,
+        )
+        date_str  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        filename  = f"Codeloom_Leads_{date_str}.csv"
+        return StreamingResponse(
+            io.BytesIO(csv_bytes),
+            media_type = "text/csv; charset=utf-8-sig",
+            headers    = {
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+    except Exception as exc:
+        logger.error("CSV download failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
