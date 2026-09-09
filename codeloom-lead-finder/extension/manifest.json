@@ -5,7 +5,8 @@
   "description": "Local lead-research automation tool for Codeloom. Connects to a local FastAPI backend.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "downloads"
   ],
   "host_permissions": [
     "http://127.0.0.1:8000/*"

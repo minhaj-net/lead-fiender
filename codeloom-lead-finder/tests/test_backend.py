@@ -60,8 +60,9 @@ class TestAutomationEndpoints:
             mock_start.return_value = mock_run
 
             resp = client.post("/automation/start", json={
-                "source_url": "https://www.facebook.com/groups/testgroup",
-                "max_leads":  10,
+                "keyword":   "web design",
+                "location":  "United States",
+                "max_leads": 10,
             })
 
         assert resp.status_code == 200
@@ -71,8 +72,9 @@ class TestAutomationEndpoints:
     def test_start_automation_already_running(self, client):
         with patch("backend.routers.automation.auto_svc.is_running", return_value=True):
             resp = client.post("/automation/start", json={
-                "source_url": "https://www.facebook.com/groups/testgroup",
-                "max_leads":  10,
+                "keyword":  "web design",
+                "location": "United States",
+                "max_leads": 10,
             })
         assert resp.status_code == 409
 
